@@ -299,6 +299,12 @@ function create_sumary {
 echo "
 # INFOS LIST
 
+## TODO
+        - create your own user
+        - set ip static
+        - modify your ip into VHOST
+
+
 ## INFOS SNMPD
 
 user:
