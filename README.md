@@ -1,7 +1,7 @@
 # LinuxScript
 Script Bash Config Server
 
-List of bash script
+##List of bash script
 
 => Install LibreNMS (Monitoring)
 
