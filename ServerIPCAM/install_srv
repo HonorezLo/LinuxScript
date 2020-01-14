@@ -1,0 +1,168 @@
+#!/bin/bash
+
+DISK_LIST="$(ls /dev/sd* | awk '{ print $1 }')"
+HOSTNAME="ZoneMinder"
+USER_NAME="zerocool"
+ROOT_PASSWORD="zerocool"
+USER_PASSWORD="zerocool"
+
+
+if [ "$EUID" -ne 0 ]
+  then echo -e "Veuillez démarrer le script en root !"
+  exit
+fi
+
+
+echo -e "\nCreate Part on Disk\n"
+for DISK in $DISK_LIST; do 
+	(
+	echo o # Create a new empty DOS partition table
+	echo n # Add a new partition
+	echo p # Primary partition
+	echo 1 # Partition number
+	echo   # First sector (Accept default: 1)
+	echo   # Last sector (Accept default: varies)
+	echo w # Write changes
+	) | fdisk $DISK
+
+	done
+
+
+echo -e "\nFormat Partition\n" 
+mkfs.ext4 /dev/sda1
+mkfs.ext4 /dev/sdb1
+mkfs.ext4 /dev/sdc1
+
+
+echo -e "\nMount the Paritions\n"
+mount /dev/sda1 /mnt
+mkdir -pv /mnt/{boot/grub,mnt/Data,mnt/Backup}
+mount -v /dev/sdb1 /mnt/mnt/Backup
+mount -v /dev/sdc1 /mnt/mnt/Data
+
+
+# Maj des dépots        
+yes 'n' | pacman -Suy 
+yes 'y' | pacman -S reflector 
+reflector --verbose -l 5 --sort rate --save /etc/pacman.d/mirrorlist
+yes 'n' | pacman -Syy
+
+echo -e "\nInstallation du système\n"
+pacstrap /mnt base base-devel git
+                     	
+echo -e "\nGeneration du fichier FSTAB\n"
+genfstab -U -p /mnt > /mnt/etc/fstab
+
+
+arch-chroot /mnt /bin/bash <<EOF
+
+	echo -e "\nGenerate Locale\n"
+	echo KEYMAP=be-latin1 >> /etc/vconsole.conf
+	echo FONT=lat9u-16 >> /etc/vconsole.conf
+
+	echo -e "\nBackup du fichier de configuration des langues\n"
+	cp -avr /etc/locale.gen /etc/locale.gen.bak
+
+	echo "\nConfiguration des locales\n"
+	sed -i '/en_US.UTF-8/s/^#//g' /etc/locale.gen
+	sed -i '/fr_BE.UTF-8/s/^#//g' /etc/locale.gen
+	sed -i '/fr_BE ISO-8859-1/s/^#//g' /etc/locale.gen
+	sed -i '/fr_BE@euro/s/^#//g' /etc/locale.gen
+	locale-gen
+	echo "LANG=fr_BE.UTF-8" >> /etc/locale.conf
+	echo "LC_COLLAPSE=C" >> /etc/locale.conf
+	export LANG=fr_BE.UTF-8
+	locale
+
+	echo -e "\nModification du Hostname\n"
+	echo $HOSTNAME > /etc/hostname
+
+	echo -e "\nSynchronisation de l'heure et du fuseaux Europe/Brussels\n"
+	ln -sfv /usr/share/zoneinfo/Europe/Brussels /etc/localtime
+	hwclock --systohc --utc
+
+	echo -e "\nCreate New User admin and change root password\n"
+	groupadd sambashare
+
+	echo "\nGenerate User and Modify Password\n"
+	yes $ROOT_PASSWORD | passwd
+	useradd -m -g users -G wheel,storage,power,sambashare -s /bin/bash $USER_NAME
+	yes $USER_PASSWORD | passwd $USER_NAME
+
+	echo -e "\nInstall Reflector\n"
+	yes 'y' | pacman -S reflector 
+	reflector --verbose -l 5 --sort rate --save /etc/pacman.d/mirrorlist
+	yes 'n' | pacman -Syy
+
+	yes 'y' | pacman -S acpi apache arch-audit autoconf automake awesome-terminal-fonts bash bind binutils bison bzip2 clamav cryptsetup curl device-mapper dhcpcd diffutils dosfstools e2fsprogs efibootmgr expect fail2ban fakeroot file filesystem flex freetype2 fuse2 galera gawk gcc gcc-libs geoip-database-extra gettext git glibc gptfdisk grep grub gzip htop inetutils iputils jfsutils less lftp libisoburn libtool licenses linux linux-firmware linux-hardened m4 make man-db man-pages mariadb mkinitcpio-nfs-utils msmtp msmtp-mta mtools mutt nano net-tools netctl networkmanager nfs-utils ntp pacman patch pbzip2 pciutils perl perl-dbd-mysql pigz pkgconf powerline-fonts procps-ng python python-mysql-connector python-pip reiserfsprogs rsync s-nail samba sed smartmontools sysfsutils syslinux tar texinfo usbutils vi which x11-ssh-askpass xfsprogs xorg-xauth zsh zsh-autosuggestions zsh-completions zsh-history-substring-search zsh-lovers zsh-syntax-highlighting zsh-theme-powerlevel9k zshdb zssh openssh php neofetch lolcat
+
+	echo -e "\nActiver le Server SSH\n"
+	systemctl enable sshd
+
+	echo -e "\nActiver le Daemond NetworkManager\n"
+	systemctl enable NetworkManager
+
+	echo -e "\nActiver le Daemond HTTP\n"
+	systemctl enable httpd
+
+	echo -e "\nConfiguration de Grub2\n"
+	echo "
+	#!/bin/bash
+	mkinitcpio -p linux
+	grub-mkconfig -o /boot/grub/grub.cfg
+	grub-install /dev/sda --recheck " > /usr/bin/install_grub
+
+	chmod -v 755 /usr/bin/install_grub
+	install_grub
+
+	chown -Rv zerocool:root /opt
+	chmod 700 /opt
+
+EOF
+
+
+	cd /opt
+
+        echo -e "\nRécupération des Source Pakku(AUR HELPER)\n"
+	git clone https://aur.archlinux.org/pakku.git
+        cd pakku
+
+        echo -e "\nCompilation et Installation PAKKu\n"
+        makepkg -si
+
+	cd ..
+
+
+	echo -e "\n\nConfiguration du moteur Mysql\n"
+	mysql_install_db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+	
+	echo "[client]
+default-character-set = latin1
+[mysqld]
+collation_server = latin1_swedish_ci
+character_set_server = latin1
+ 
+[mysql]
+default-character-set = latin1" >> /etc/mysql/my.cnf
+	 
+	echo -e "\nActivation du Service MySQL\n"
+	systemctl enable mysqld # Démarrer le service au démarrage
+	systemctl start mysqld  # Redémarrer le service
+	
+	if [ $DEBUG -eq 1 ]; then 
+		systemctl status mysqld # Vérification
+	fi
+
+	echo -e "\nSécurisation de base de MySQL\n"
+	mysql_secure_installation <<EOF
+y
+arch-server
+arch-server
+y
+y
+y
+y
+EOF
+
+	cp -avr file_config/VulnScan /usr/bin
+
