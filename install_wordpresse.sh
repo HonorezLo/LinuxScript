@@ -4,23 +4,15 @@
 
 USERNAME="vagrant"
 
-LIST_PACKAGES="unzip mariadb-client python-mysqldb mariadb-server curl fping git graphviz imagemagick nmap python-memcache net-tools mtr-tiny rrdtool whois snmp snmpd acl libsnmp-dev libapache2-mod-php7.3 php7.3-cli php7.3-curl php7.3-gd php7.3-json php7.3-mbstring php7.3-mysql php7.3-snmp php7.3-xml php7.3-zip apache2 composer"
+LIST_PACKAGES="unzip mariadb-client python-mysqldb mariadb-server curl fping git graphviz imagemagick nmap python-memcache net-tools mtr-tiny rrdtool whois acl libapache2-mod-php7.3 php7.3-cli php7.3-curl php7.3-gd php7.3-json php7.3-mbstring php7.3-mysql php7.3-xml php7.3-zip apache2 composer"
 SERVER_NAME="192.168.33.10"
 
-SNMPUSER_RW="vagrantRw"
-SNMP_PASSWD_RW="Test123*"
-
-SNMPUSER_RO="vagrantRo"
-SNMP_PASSWD_RO="Test123*"
-
-USER_LNMS="vagrant"
-PASS_LMNS="vagrant"
+USER_WORDPRESS="vagrant"
+PASS_WORDPRESS="vagrant"
 
 DB_USER="vagrant"
 DB_PASS="vagrant"
 
-MAIL_ADDRESS="tonmail@gmail.com"
-LOCATION="Belgium, Mons"
 
 ############################################################################################################################################################
 ############################################################################################################################################################
@@ -31,16 +23,18 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+
 function top {
     clear
-    echo -e "*----------------------------------------------------------------------*"
-    echo -e "|   I N S T A L L   L I B R E N M S    S E R V E R                     |"
+    echo -e "\n*----------------------------------------------------------------------*"
+    echo -e "|   I N S T A L L   W O R D P R E S S    S E R V E R                   |"
     echo -e "*----------------------------------------------------------------------*\n"
 }
 
 #################################################### <  I N S T A L L   D E P E N D A N C Y   > #############################################################
 
 function update {
+	top
     sudo apt-get --yes --force-yes update
     sudo apt-get --yes --force-yes upgrade
     sudo apt-get --yes --force-yes dist-upgrade
@@ -49,7 +43,7 @@ function update {
 function php_maj {
     top
     echo -e "\n*-------------------------------------*"
-    echo -e "|     I N S T A L L   P H P 7.3       |"
+    echo -e "|     I N S T A L L   P H P  7.3      |"
     echo -e "*-------------------------------------*\n"
     sudo apt-get --yes --force-yes install lsb-release apt-transport-https ca-certificates
     sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
@@ -76,7 +70,6 @@ function config_database {
   echo -e "\n*-------------------------------------------*"
   echo -e "|     I N I T   T H E   D A T A B A S  E     |"
   echo -e "*-------------------------------------------*\n"
-
   echo -e "\nSecure the database\n"
 
 sudo mysql_secure_installation << EOF
@@ -133,47 +126,142 @@ collation-server     = utf8mb4_general_ci
 
 [mariadb]
 
-[mariadb-10.1]
+[mariadb-10.1] 
 
 " > /etc/mysql/mariadb.conf.d/50-server.cnf
   
   sudo /etc/init.d/mysql restart
   
-
   echo -e "\n*-------------------------------------------*"
   echo -e "|   C R E A T E   T H E   D A T A B A S E   |"
   echo -e "*-------------------------------------------*\n"
-  mysql -u root -p$DB_PASS -e "CREATE DATABASE librenms CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
-  mysql -u root -p$DB_PASS -e "CREATE USER 'librenms'@'localhost' IDENTIFIED BY 'vagrant';"
-  mysql -u root -p$DB_PASS -e "GRANT ALL PRIVILEGES ON librenms.* TO 'librenms'@'localhost';"
+  mysql -u root -p$DB_PASS -e "CREATE DATABASE wordpressdb CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
+  mysql -u root -p$DB_PASS -e "CREATE USER 'wordpress'@'localhost' IDENTIFIED BY 'wordpress';"
+  mysql -u root -p$DB_PASS -e "GRANT ALL PRIVILEGES ON wordpressdb.* TO 'wordpress'@'localhost';"
   mysql -u root -p$DB_PASS -e "FLUSH PRIVILEGES;"
+  
   sudo /etc/init.d/mysql restart
+  
 }
 
 
-function config_php {
+function config_wordpress {
 
     echo -e "\n*------------------------------------------*"
-    echo -e "|   C R E A T E   T H E  L I B R E N M S   |"
+    echo -e "|    I N S T A L L   W O R D P R E S S     |"
     echo -e "*------------------------------------------*\n"
-    sudo useradd librenms -d /opt/librenms -M -r
-    sudo usermod -a -G librenms www-data
+   	cd /var/www/html/
+   	sudo curl -O https://wordpress.org/latest.tar.gz
+   	sudo tar -xvf latest.tar.gz
+   	sudo rm -v latest.tar.gz
+   	echo -e "\n*--------------------------------------------------------*"
+    echo -e "|    S E T  P E R M I S S I O N    W O R D P R E S S     |"
+    echo -e "*--------------------------------------------------------*\n"
+	sudo chown -R www-data:www-data /var/www/html/wordpress
+   	sudo find /var/www/html/wordpress/ -type d -exec chmod 750 {} \;
+	sudo find /var/www/html/wordpress/ -type f -exec chmod 640 {} \;
+    
+    cd wordpress
+    sudo mv wp-config-sample.php wp-config.php
+    
+    echo -e "\n*--------------------------------------------------------*"
+    echo -e "|    S E T  P E R M I S S I O N    W O R D P R E S S     |"
+    echo -e "*--------------------------------------------------------*\n"
+    SECURE=$(sudo curl -s https://api.wordpress.org/secret-key/1.1/salt/)
+    
+    
+    echo "
+<?php
+/**
+ * The base configuration for WordPress
+ *
+ * The wp-config.php creation script uses this file during the
+ * installation. You don't have to use the web site, you can
+ * copy this file to "wp-config.php" and fill in the values.
+ *
+ * This file contains the following configurations:
+ *
+ * * MySQL settings
+ * * Secret keys
+ * * Database table prefix
+ * * ABSPATH
+ *
+ * @link https://codex.wordpress.org/Editing_wp-config.php
+ *
+ * @package WordPress
+ */
 
-    sudo chown -Rv $USERNAME:$USERNAME /opt
-    cd /opt
-    git clone https://github.com/librenms/librenms.git
+// ** MySQL settings - You can get this info from your web host ** //
+/** The name of the database for WordPress */
+define( 'DB_NAME', 'wordpressdb' );
 
-    sudo chown -Rv librenms:librenms /opt/librenms
-    sudo chmod -v 770 /opt/librenms
-    sudo setfacl -d -m g::rwx /opt/librenms/rrd /opt/librenms/logs /opt/librenms/bootstrap/cache/ /opt/librenms/storage/
-    sudo setfacl -R -m g::rwx /opt/librenms/rrd /opt/librenms/logs /opt/librenms/bootstrap/cache/ /opt/librenms/storage/
+/** MySQL database username */
+define( 'DB_USER', 'wordpress' );
 
-    echo -e "\n*-----------------------------------*"
-    echo -e "| I  N S T A L L   P H P   L I B S  |"
-    echo -e "*-----------------------------------*\n"
-    cd /opt/librenms
-    sudo -u librenms ./scripts/composer_wrapper.php install --no-dev
+/** MySQL database password */
+define( 'DB_PASSWORD', 'wordpress' );
 
+/** MySQL hostname */
+define( 'DB_HOST', 'localhost' );
+
+/** Database Charset to use in creating database tables. */
+define( 'DB_CHARSET', 'utf8' );
+
+/** The Database Collate type. Don't change this if in doubt. */
+define( 'DB_COLLATE', '' );
+
+/**#@+
+ * Authentication Unique Keys and Salts.
+ *
+ * Change these to different unique phrases!
+ * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
+ * You can change these at any point in time to invalidate all existing cookies. This will force all users to have to log in again.
+ *
+ * @since 2.6.0
+ */
+ 
+$SECURE
+
+/**#@-*/
+
+/**
+ * WordPress Database Table prefix.
+ *
+ * You can have multiple installations in one database if you give each
+ * a unique prefix. Only numbers, letters, and underscores please!
+ */
+$table_prefix = 'wp_';
+
+/**
+ * For developers: WordPress debugging mode.
+ *
+ * Change this to true to enable the display of notices during development.
+ * It is strongly recommended that plugin and theme developers use WP_DEBUG
+ * in their development environments.
+ *
+ * For information on other constants that can be used for debugging,
+ * visit the Codex.
+ *
+ * @link https://codex.wordpress.org/Debugging_in_WordPress
+ */
+define( 'WP_DEBUG', false );
+
+/* That's all, stop editing! Happy publishing. */
+
+/** Absolute path to the WordPress directory. */
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', dirname( __FILE__ ) . '/' );
+}
+
+/** Sets up WordPress vars and included files. */
+require_once( ABSPATH . 'wp-settings.php' );    
+
+" > wp-config.php
+   	
+    echo -e "\n*----------------------------------------*"
+    echo -e "| C O N F I G   P H P   T I M E Z O N E  |"
+    echo -e "*----------------------------------------*\n"
+    
     sudo cp -avr /etc/php/7.3/cli/php.ini /etc/php/7.3/cli/php.ini.backup
     sudo cp -avr /etc/php/7.3/apache2/php.ini /etc/php/7.3/apache2/php.ini.backup
 
@@ -187,19 +275,17 @@ function config_php {
     sudo a2enmod php7.3
     sudo a2dismod mpm_event
     sudo a2enmod mpm_prefork
-
+	echo "ServerName $SERVER_NAME" >> /etc/apache2/apache2.conf
+   	
 echo "
 <VirtualHost *:80>
-    DocumentRoot /opt/librenms/html/
+    DocumentRoot /var/www/html/wordpress/
     ServerName $SERVER_NAME
-    AllowEncodedSlashes NoDecode
 
-    <Directory "/opt/librenms/html/">
-        Require all granted
+    <Directory "/var/www/html/wordpress/">
         AllowOverride All
-        Options FollowSymLinks MultiViews
     </Directory>
-</VirtualHost>" > /etc/apache2/sites-available/librenms.conf
+</VirtualHost>" > /etc/apache2/sites-available/wordpress.conf
 
 
     sudo systemctl enable apache2
@@ -216,87 +302,19 @@ ServerSignature Off
 TraceEnable Off" > /etc/apache2/conf-available/security.conf 
 
     sudo a2dissite 000-default
-    sudo a2ensite librenms.conf
+    sudo a2ensite wordpress.conf
     sudo a2enmod rewrite
-
+		
+	sudo apache2ctl configtest
     sudo /etc/init.d/apache2 restart
 }
 
-function config_snmp {
-
-    echo -e "\n*----------------------------------------*"
-    echo -e "|   C O N F I G U R E    S N M P D       |"
-    echo -e "*----------------------------------------*\n"
-    sudo curl -o /usr/bin/distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
-    sudo chmod +x /usr/bin/distro
-    sudo /etc/init.d/snmpd restart
-
-    sudo cp -avr /opt/librenms/librenms.nonroot.cron /etc/cron.d/librenms
-    sudo cp -avr /opt/librenms/misc/librenms.logrotate /etc/logrotate.d/librenms
-
-    sudo systemctl stop snmpd
-
-
-    echo -e "\n*----------------------------------------*"
-    echo -e "| M O D I F Y   C O N F I G  S N M P D   |"
-    echo -e "*----------------------------------------*\n"
-    echo -e "\nBackup SNMPD conf file\n"
-    sudo cp -avr /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup
-
-    echo "
-agentAddress  udp:$SERVER_NAME:161
-
-view   systemonly  included   .1.3.6.1.2.1.1
-view   systemonly  included   .1.3.6.1.2.1.25.1
-
- rocommunity public  default    -V systemonly
- rocommunity6 public  default   -V systemonly
-
-
- rouser   authOnlyUser
-
-
-sysLocation    $LOCATION
-sysContact     Me $MAIL_ADDRESS
-sysServices    72
-
-
-proc  mountd
-proc  ntalkd    4
-proc  sendmail 10 1
-
-
-disk       /     10000
-disk       /var  5%
-includeAllDisks  10%
-
-load   12 10 5
-
- trapsink     localhost public
-
-
-iquerySecName   internalUser       
-rouser          internalUser
-
-
- extend    test1   /bin/echo  Hello, world!
- extend-sh test2   echo Hello, world! ; echo Hi there ; exit 35
-
- master          agentx" > /etc/snmp/snmpd.conf
-
-
-    # add user readonly
-    sudo net-snmp-create-v3-user -ro -A $SNMP_PASSWD_RW -a SHA -X $SNMP_PASSWD_RW -x AES $SNMPUSER_RW
-
-    # add user read/write
-    sudo net-snmp-create-v3-user -A $SNMP_PASSWD_RO -a SHA -X $SNMP_PASSWD_RO -x AES $SNMPUSER_RO
-
-    sudo systemctl restart snmpd
-    sudo systemctl enable snmpd
-}
-
 function create_sumary {
+
+cd /home/vagrant
+
 echo "
+
 # INFOS LIST
 
 ## TODO
@@ -305,23 +323,13 @@ echo "
         - modify your ip into VHOST
 
 
-## INFOS SNMPD
+## INFOS WORDPRESS
 
 user:
-    - $SNMPUSER_RW
-    - $SNMPUSER_RO
+    - $USER_WORDPRESS
 
 password:
-    - $SNMP_PASSWD_RW
-    - $SNMP_PASSWD_RO
-
-## INFOS LIBRENMS
-
-user:
-    - $USER_LNMS
-
-password:
-    - $PASS_LMNS
+    - $PASS_WORDPRESS
 
 ## INFOS DATABASE
 
@@ -331,39 +339,23 @@ user:
 
 password:
     - vagrant
-    - $DB_PASS
-
-## TEST SNMP
-
-snmpwalk -v3 -a SHA -A "Test123*" -x AES -X "Test123*" -l authPriv -u "vagrantRw" 192.168.33.10 | head -10
-" > Readme.md
-
+    - $DB_PASS " > Readme.md
+    
 }
 
-function fix_perm {
-	
-	echo -e "\n*----------------------------------------*"
-  echo -e "|    F I X  L M N S  P E R M I S S I O N   |"
-  echo -e "*----------------------------------------*\n"
-	yes | ./scripts/github-remove -d
-	sudo chown -R librenms:librenms /opt/librenms
-	sudo setfacl -d -m g::rwx /opt/librenms/rrd /opt/librenms/logs /opt/librenms/bootstrap/cache/ /opt/librenms/storage/
-	sudo chmod -R ug=rwX /opt/librenms/rrd /opt/librenms/logs /opt/librenms/bootstrap/cache/ /opt/librenms/storage/
-	
-}
 
 function show_infos {
 	
 	echo -e "\n*-----------------------------------------------*"
-  echo -e "|    F I N I S H E D   I N S T A L L A T I O N  |"
-  echo -e "*-----------------------------------------------*\n"
+    echo -e "|    F I N I S H E D   I N S T A L L A T I O N  |"
+    echo -e "*-----------------------------------------------*\n"
 	echo -e "[V] HTTPD (apache) Installed / configured"
 	echo -e "[V] Database (mysqld) Installed / configured"
-	echo -e "[V] Agent SNMPD Installed / configured"
-	echo -e "[V] LibreNMS Installed"
+	echo -e "[V] WORDPRESS Installed"
 	echo -e "[INFOS] Please visit http://$SERVER_NAME/"
 	echo -e "[INFOS] You can add a device by visiting http://$SERVER_NAME/addhost"
-	echo -e "[INFOS] Create your Dashboard and let's play it"
+	echo -e "[INFOS] Create your Dashboard and let's play it\n"
+	
 }
 
 ############################################################################################################################################################
@@ -373,21 +365,12 @@ function main {
     php_maj
     install_deps
     config_database
-    config_php
-    config_snmp
-    cd /home/vagrant
+    config_wordpress
     create_sumary
-		fix_perm
 		
     sudo systemctl status mysql
     sudo systemctl status apache2
-    sudo systemctl status snmpd
 
-
-		echo -e "\n*----------------------------------------*"
-  	echo -e "|    T E S T   S N M P D   A G E N T     |"
-  	echo -e "*----------------------------------------*\n"
-    snmpwalk -v3 -a SHA -A $SNMP_PASSWD_RW -x AES -X $SNMP_PASSWD_RW -l authPriv -u $SNMPUSER_RW  $SERVER_NAME | head -10
     show_infos
 }
 
