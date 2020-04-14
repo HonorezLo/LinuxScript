@@ -1,11 +1,15 @@
 #!/bin/bash
 
+# AUTHOR : Jordan Bertieaux
+# INFOS : Installation script WORDPRESS on debian 10
+# COPYRIGHT : Convidencia 2019
+#
 #################################################### <  C O N F I G U R A B L E    > #############################################################
 
 USERNAME="vagrant"
 
 LIST_PACKAGES="unzip mariadb-client python-mysqldb mariadb-server curl fping git graphviz imagemagick nmap python-memcache net-tools mtr-tiny rrdtool whois acl libapache2-mod-php7.3 php7.3-cli php7.3-curl php7.3-gd php7.3-json php7.3-mbstring php7.3-mysql php7.3-xml php7.3-zip apache2 composer"
-SERVER_NAME="192.168.33.10"
+SERVER_NAME="192.168.33.30"
 
 USER_WORDPRESS="vagrant"
 PASS_WORDPRESS="vagrant"
@@ -126,12 +130,12 @@ collation-server     = utf8mb4_general_ci
 
 [mariadb]
 
-[mariadb-10.1] 
+[mariadb-10.1]
 
 " > /etc/mysql/mariadb.conf.d/50-server.cnf
-  
+
   sudo /etc/init.d/mysql restart
-  
+
   echo -e "\n*-------------------------------------------*"
   echo -e "|   C R E A T E   T H E   D A T A B A S E   |"
   echo -e "*-------------------------------------------*\n"
@@ -139,9 +143,9 @@ collation-server     = utf8mb4_general_ci
   mysql -u root -p$DB_PASS -e "CREATE USER 'wordpress'@'localhost' IDENTIFIED BY 'wordpress';"
   mysql -u root -p$DB_PASS -e "GRANT ALL PRIVILEGES ON wordpressdb.* TO 'wordpress'@'localhost';"
   mysql -u root -p$DB_PASS -e "FLUSH PRIVILEGES;"
-  
+
   sudo /etc/init.d/mysql restart
-  
+
 }
 
 
@@ -160,16 +164,16 @@ function config_wordpress {
 	sudo chown -R www-data:www-data /var/www/html/wordpress
    	sudo find /var/www/html/wordpress/ -type d -exec chmod 750 {} \;
 	sudo find /var/www/html/wordpress/ -type f -exec chmod 640 {} \;
-    
+
     cd wordpress
     sudo mv wp-config-sample.php wp-config.php
-    
+
     echo -e "\n*--------------------------------------------------------*"
     echo -e "|    S E T  P E R M I S S I O N    W O R D P R E S S     |"
     echo -e "*--------------------------------------------------------*\n"
     SECURE=$(sudo curl -s https://api.wordpress.org/secret-key/1.1/salt/)
-    
-    
+
+
     echo "
 <?php
 /**
@@ -219,7 +223,7 @@ define( 'DB_COLLATE', '' );
  *
  * @since 2.6.0
  */
- 
+
 $SECURE
 
 /**#@-*/
@@ -254,14 +258,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /** Sets up WordPress vars and included files. */
-require_once( ABSPATH . 'wp-settings.php' );    
+require_once( ABSPATH . 'wp-settings.php' );
 
 " > wp-config.php
-   	
+
     echo -e "\n*----------------------------------------*"
     echo -e "| C O N F I G   P H P   T I M E Z O N E  |"
     echo -e "*----------------------------------------*\n"
-    
+
     sudo cp -avr /etc/php/7.3/cli/php.ini /etc/php/7.3/cli/php.ini.backup
     sudo cp -avr /etc/php/7.3/apache2/php.ini /etc/php/7.3/apache2/php.ini.backup
 
@@ -276,7 +280,7 @@ require_once( ABSPATH . 'wp-settings.php' );
     sudo a2dismod mpm_event
     sudo a2enmod mpm_prefork
 	echo "ServerName $SERVER_NAME" >> /etc/apache2/apache2.conf
-   	
+
 echo "
 <VirtualHost *:80>
     DocumentRoot /var/www/html/wordpress/
@@ -295,16 +299,16 @@ echo "
     echo -e "| S E C U R I S E   A P A C H E   |"
     echo -e "*---------------------------------*\n"
     sudo cp -avr /etc/apache2/conf-available/security.conf /etc/apache2/conf-available/security.conf.backup
-    
+
     echo "
 ServerTokens Prod
 ServerSignature Off
-TraceEnable Off" > /etc/apache2/conf-available/security.conf 
+TraceEnable Off" > /etc/apache2/conf-available/security.conf
 
     sudo a2dissite 000-default
     sudo a2ensite wordpress.conf
     sudo a2enmod rewrite
-		
+
 	sudo apache2ctl configtest
     sudo /etc/init.d/apache2 restart
 }
@@ -340,12 +344,12 @@ user:
 password:
     - vagrant
     - $DB_PASS " > Readme.md
-    
+
 }
 
 
 function show_infos {
-	
+
 	echo -e "\n*-----------------------------------------------*"
     echo -e "|    F I N I S H E D   I N S T A L L A T I O N  |"
     echo -e "*-----------------------------------------------*\n"
@@ -355,7 +359,7 @@ function show_infos {
 	echo -e "[INFOS] Please visit http://$SERVER_NAME/"
 	echo -e "[INFOS] You can add a device by visiting http://$SERVER_NAME/addhost"
 	echo -e "[INFOS] Create your Dashboard and let's play it\n"
-	
+
 }
 
 ############################################################################################################################################################
@@ -367,7 +371,7 @@ function main {
     config_database
     config_wordpress
     create_sumary
-		
+
     sudo systemctl status mysql
     sudo systemctl status apache2
 
